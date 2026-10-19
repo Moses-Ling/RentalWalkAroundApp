@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Condition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+enum WorkingOrder {
+  WORKING
+  PARTIAL
+  NOT_WORKING
+  NA
+}
+enum InspectionType {
+  MOVE_IN
+  MOVE_OUT
+}
+enum InspectionStatus {
+  DRAFT
+  SIGNED
+}
+enum LeaseStatus {
+  DRAFT
+  ACTIVE
+  ENDED
+}
+enum ChangeStatus {
+  UNCHANGED
+  NEW_DAMAGE
+  REPAIRED
+  WORKING_ORDER_CHANGED
+}
+enum Responsibility {
+  TENANT
+  NORMAL_WEAR
+  LANDLORD_MAINTENANCE
+}
+enum BlemishStatus {
+  OPEN
+  REPAIRED
+}
+enum SignerRole {
+  LANDLORD
+  RENTER
+}
+enum PhotoKind {
+  ORIGINAL
+  ANNOTATED
+}
+
+model Owner {
+  id         String     @id @default(cuid())
+  email      String     @unique
+  createdAt  DateTime   @default(now())
+  properties Property[]
+}
+
+model Property {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     Owner    @relation(fields: [ownerId], references: [id])
+  name      String
+  address   String   @default("")
+  createdAt DateTime @default(now())
+  rooms     Room[]
+  leases    Lease[]
+}
+
+model Room {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String
+  sortOrder  Int      @default(0)
+  items      Item[]
+}
+
+model Item {
+  id        String  @id @default(cuid())
+  roomId    String
+  room      Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  name      String
+  isEquipment Boolean @default(false)
+  sortOrder Int     @default(0)
+}
+
+model Lease {
+  id          String       @id @default(cuid())
+  propertyId  String
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  renterName  String
+  renterEmail String       @default("")
+  renterPhone String       @default("")
+  startDate   DateTime
+  endDate     DateTime
+  status      LeaseStatus  @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  inspections Inspection[]
+  repairs     Repair[]
+}
+
+model Inspection {
+  id        String           @id @default(cuid())
+  leaseId   String
+  lease     Lease            @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  type      InspectionType
+  status    InspectionStatus @default(DRAFT)
+  notes     String           @default("")
+  createdAt DateTime         @default(now())
+  signedAt  DateTime?
+  rooms     InspectionRoom[]
+  signatures Signature[]
+
+  @@unique([leaseId, type])
+}
+
+model InspectionRoom {
+  id           String         @id @default(cuid())
+  inspectionId String
+  inspection   Inspection     @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  name         String
+  sortOrder    Int            @default(0)
+  condition    Condition?
+  notes        String         @default("")
+  items        InspectionItem[]
+  blemishes    Blemish[]
+  photos       Photo[]
+  comments     Comment[]
+}
+
+model InspectionItem {
+  id           String         @id @default(cuid())
+  roomId       String
+  room         InspectionRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  name         String
+  isEquipment  Boolean        @default(false)
+  sortOrder    Int            @default(0)
+  condition    Condition?
+  workingOrder WorkingOrder?
+  notes        String         @default("")
+  changeStatus ChangeStatus?
+  priorItemId  String?
+  blemishes    Blemish[]
+  photos       Photo[]
+  comments     Comment[]
+  repairs      Repair[]
+}
+
+model Blemish {
+  id          String          @id @default(cuid())
+  roomId      String
+  room        InspectionRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  itemId      String?
+  item        InspectionItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  description String
+  status      BlemishStatus   @default(OPEN)
+  priorBlemishId String?
+  createdAt   DateTime        @default(now())
+  photos      Photo[]
+  comments    Comment[]
+  repairs     Repair[]
+}
+
+model Photo {
+  id         String          @id @default(cuid())
+  storageKey String
+  kind       PhotoKind       @default(ORIGINAL)
+  originalId String?
+  mimeType   String
+  caption    String          @default("")
+  createdAt  DateTime        @default(now())
+  roomId     String?
+  room       InspectionRoom? @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  itemId     String?
+  item       InspectionItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  blemishId  String?
+  blemish    Blemish?        @relation(fields: [blemishId], references: [id], onDelete: Cascade)
+  repairId   String?
+  repair     Repair?         @relation(fields: [repairId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id        String          @id @default(cuid())
+  author    SignerRole
+  text      String
+  createdAt DateTime        @default(now())
+  roomId    String?
+  room      InspectionRoom? @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  itemId    String?
+  item      InspectionItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  blemishId String?
+  blemish   Blemish?        @relation(fields: [blemishId], references: [id], onDelete: Cascade)
+}
+
+model Signature {
+  id           String       @id @default(cuid())
+  inspectionId String
+  inspection   Inspection   @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  role         SignerRole
+  name         String
+  imageDataUrl String
+  signedAt     DateTime     @default(now())
+
+  @@unique([inspectionId, role])
+}
+
+model Repair {
+  id             String          @id @default(cuid())
+  leaseId        String
+  lease          Lease           @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  date           DateTime
+  description    String
+  vendor         String          @default("")
+  costCents      Int             @default(0)
+  responsibility Responsibility  @default(LANDLORD_MAINTENANCE)
+  blemishId      String?
+  blemish        Blemish?        @relation(fields: [blemishId], references: [id], onDelete: SetNull)
+  itemId         String?
+  item           InspectionItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+  photos         Photo[]
+}

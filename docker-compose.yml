@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16
+    container_name: rentalwalk-db
+    environment:
+      POSTGRES_USER: rental
+      POSTGRES_PASSWORD: rental
+      POSTGRES_DB: rental
+    ports:
+      - "5433:5432"
+    volumes:
+      - rentalwalk-pgdata:/var/lib/postgresql/data
+volumes:
+  rentalwalk-pgdata:
