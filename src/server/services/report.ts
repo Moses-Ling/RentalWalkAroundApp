@@ -3,6 +3,7 @@ import { getStorage } from "../storage";
 import { PdfWriter } from "../pdf";
 import { dataUrlToBuffer } from "../images";
 import { getInspection, FullInspection } from "./inspection";
+import { MOVE_IN_ACKNOWLEDGMENT } from "../../lib/acknowledgment";
 
 type PhotoRow = { id: string; storageKey: string; mimeType: string; kind: string; originalId: string | null; caption: string };
 
@@ -73,6 +74,13 @@ export async function buildInspectionPdf(ownerId: string, inspectionId: string):
       w.text(`- ${b.description}${b.status === "REPAIRED" ? " (repaired)" : ""}`, { indent: 16, size: 9, color: [0.7, 0.1, 0.1] });
       await writePhotos(w, b.photos, 24);
       for (const c of b.comments) w.text(`${label(c.author)} comment: ${c.text}`, { indent: 24, size: 9 });
+    }
+  }
+  if (insp.type === "MOVE_IN") {
+    w.heading(MOVE_IN_ACKNOWLEDGMENT.title, 12);
+    for (const p of MOVE_IN_ACKNOWLEDGMENT.paragraphs) {
+      w.text(p, { size: 9 });
+      w.gap(4);
     }
   }
   await writeSignatures(w, insp);

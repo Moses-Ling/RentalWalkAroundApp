@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import Photos from "../../../components/Photos";
 import SignaturePad from "../../../components/SignaturePad";
 import { api, enumLabel, useApi } from "../../../lib/client";
+import { MOVE_IN_ACKNOWLEDGMENT } from "../../../lib/acknowledgment";
 
 const CONDITIONS = ["EXCELLENT", "GOOD", "FAIR", "POOR", "DAMAGED"];
 const WORKING = ["WORKING", "PARTIAL", "NOT_WORKING", "NA"];
@@ -139,6 +140,12 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
 
       <section className="card space-y-3">
         <h2 className="font-medium">Sign-off</h2>
+        {!moveOut && (
+          <div className="space-y-2 rounded bg-slate-50 p-3 text-xs text-slate-700">
+            <p className="font-medium">{MOVE_IN_ACKNOWLEDGMENT.title}</p>
+            {MOVE_IN_ACKNOWLEDGMENT.paragraphs.map((p) => <p key={p}>{p}</p>)}
+          </div>
+        )}
         {locked ? (
           <p className="text-sm text-slate-600">Both parties signed. This record can no longer be edited.</p>
         ) : (
