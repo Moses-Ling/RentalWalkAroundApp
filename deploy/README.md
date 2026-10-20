@@ -9,7 +9,7 @@ laptop joins, the iPad opens `http://<laptop-address>:3000`.
 1. Install **Docker Desktop** on the laptop and open it once (sign in if asked).
 2. Create a folder, e.g. `~/rental`, and put two files in it:
    - `docker-compose.yml` (copy from this `deploy/` folder)
-   - `.env` (copy `.env.example`, then edit: your Docker Hub username, and your own passwords)
+   - `.env` (copy `.env.example`, then edit: your Docker Hub username in lowercase (e.g. `mosesling`), and your own passwords)
 3. The image is in a private Docker Hub repo, so sign in once on the laptop: `docker login -u MosesLing`
    (use your Docker Hub password or an access token).
 4. In that folder, download the images **now**, while you have internet:
