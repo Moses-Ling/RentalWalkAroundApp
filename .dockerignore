@@ -1,0 +1,8 @@
+node_modules
+.next
+uploads
+.env
+.git
+.claude
+deploy
+*.md
