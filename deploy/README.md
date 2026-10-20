@@ -42,15 +42,27 @@ travel router / phone hotspot that both devices join.
 Security: the app is protected by your password, but traffic on the local network is plain HTTP.
 Avoid public networks.
 
-## C. Back up what you collected
+## C. Where your data lives, and backups
 
-From `~/rental`:
+Everything is stored on the laptop in a `data` folder next to `docker-compose.yml`:
+```
+~/rental/data/uploads/    all photos
+~/rental/data/postgres/   the database files
+```
+Stopping, removing or updating the containers never touches this folder.
+Deleting the folder (or `~/rental`) deletes your data, so do not.
+
+**Safest backup** (consistent database dump plus photos), run from `~/rental`:
 ```bash
 docker compose exec -T db pg_dump -U rental rental > backup-$(date +%F).sql
-docker compose cp app:/data/uploads ./uploads-backup-$(date +%F)
+cp -R data/uploads uploads-backup-$(date +%F)
 ```
-Data lives in Docker volumes (`pgdata`, `uploads`). `docker compose down` keeps them;
-**`docker compose down -v` deletes them.**
+Copy those two items to a USB drive or cloud storage when you are done.
+Simply copying `data/postgres` while the app is running can give a corrupt copy;
+if you want to copy that folder, run `docker compose down` first.
+
+Restoring on another machine: start the stack, then
+`docker compose exec -T db psql -U rental rental < backup-DATE.sql` and copy the photos into `data/uploads/`.
 
 ## D. Updating to a new version
 ```bash

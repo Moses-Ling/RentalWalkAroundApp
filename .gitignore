@@ -4,3 +4,4 @@ uploads
 .env
 tsconfig.tsbuildinfo
 next-env.d.ts
+deploy/data

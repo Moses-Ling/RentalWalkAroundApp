@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: rental
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Host folders: your data lives in ./data next to this file, on the Mac itself.
+      - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rental -d rental"]
       interval: 3s
@@ -31,8 +32,4 @@ services:
       # reach it at http://<mac-address>:3000 whatever network the Mac joins.
       - "3000:3000"
     volumes:
-      - uploads:/data/uploads
-
-volumes:
-  pgdata:
-  uploads:
+      - ./data/uploads:/data/uploads
