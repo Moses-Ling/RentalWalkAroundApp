@@ -10,13 +10,15 @@ laptop joins, the iPad opens `http://<laptop-address>:3000`.
 2. Create a folder, e.g. `~/rental`, and put two files in it:
    - `docker-compose.yml` (copy from this `deploy/` folder)
    - `.env` (copy `.env.example`, then edit: your Docker Hub username, and your own passwords)
-3. In that folder, download the images **now**, while you have internet:
+3. The image is in a private Docker Hub repo, so sign in once on the laptop: `docker login -u MosesLing`
+   (use your Docker Hub password or an access token).
+4. In that folder, download the images **now**, while you have internet:
    ```bash
    cd ~/rental
    docker compose pull
    docker compose up -d
    ```
-4. Open `http://localhost:3000` on the laptop, sign in with `APP_PASSWORD`, then stop it if you like
+5. Open `http://localhost:3000` on the laptop, sign in with `APP_PASSWORD`, then stop it if you like
    (`docker compose down` keeps all data).
 
 Do this at home. At the property you may have no internet, and the images are already on the laptop.
