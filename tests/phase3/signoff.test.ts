@@ -52,13 +52,6 @@ describe("signing", () => {
     expect(await prisma.signature.count()).toBe(0);
   });
 
-  it("does not discard signatures when only a comment is added", async () => {
-    const { owner, insp } = await seedMoveIn();
-    await S.signInspection(owner.id, insp.id, "LANDLORD", "Lee", sig);
-    await S.addComment(owner.id, { roomId: insp.rooms[0].id }, "RENTER", "I disagree");
-    expect(await prisma.signature.count()).toBe(1);
-  });
-
   it("validates name, role and image; is owner-scoped", async () => {
     const { owner, insp } = await seedMoveIn();
     await expect(S.signInspection(owner.id, insp.id, "RENTER", " ", sig)).rejects.toThrow(/name/);
@@ -103,5 +96,14 @@ describe("PDF report", () => {
   it("sanitizes characters Helvetica cannot encode", () => {
     expect(sanitize("ok ✓ 日本")).toBe("ok ? ??");
     expect(sanitize("café")).toBe("café");
+  });
+});
+
+describe("comments after a partial signature", () => {
+  it("clears the existing signature so the other party must agree again", async () => {
+    const { owner, insp } = await seedMoveIn();
+    await S.signInspection(owner.id, insp.id, "LANDLORD", "Lee Landlord", sig);
+    await S.addComment(owner.id, { roomId: insp.rooms[0].id }, "RENTER", "Please note the stain");
+    expect(await prisma.signature.count({ where: { inspectionId: insp.id } })).toBe(0);
   });
 });

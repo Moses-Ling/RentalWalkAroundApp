@@ -17,7 +17,7 @@ export async function addComment(ownerId: string, target: CommentTarget, author:
     : target.itemId
       ? ({ kind: "item", id: target.itemId } as const)
       : ({ kind: "blemish", id: target.blemishId! } as const);
-  await resolveEditable(ownerId, t, { keepSignatures: true });
+  await resolveEditable(ownerId, t);
   return prisma.comment.create({ data: { author, text: text.trim(), ...target } });
 }
 

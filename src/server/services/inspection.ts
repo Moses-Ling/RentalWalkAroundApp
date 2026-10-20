@@ -163,6 +163,45 @@ export async function resolveEditable(ownerId: string, t: Target, opts: { keepSi
   return insp;
 }
 
+/** Room/item names are only changeable on a move-in; a move-out mirrors the signed move-in. */
+async function newName(insp: { type: InspectionType }, name: string, label: string) {
+  if (insp.type !== "MOVE_IN") throw conflict("Names can only be changed on a move-in inspection");
+  if (!name?.trim()) throw badRequest(`${label} name is required`);
+  return name.trim();
+}
+
+async function structureEditable(ownerId: string, t: Target) {
+  const insp = await resolveEditable(ownerId, t);
+  if (insp.type !== "MOVE_IN") throw conflict("Rooms and items can only be changed on a move-in inspection");
+  return insp;
+}
+
+export async function addInspectionRoom(ownerId: string, inspectionId: string, name: string) {
+  await structureEditable(ownerId, { kind: "inspection", id: inspectionId });
+  if (!name?.trim()) throw badRequest("Room name is required");
+  const count = await prisma.inspectionRoom.count({ where: { inspectionId } });
+  return prisma.inspectionRoom.create({ data: { inspectionId, name: name.trim(), sortOrder: count } });
+}
+
+export async function addInspectionItem(ownerId: string, roomId: string, data: { name: string; isEquipment?: boolean }) {
+  await structureEditable(ownerId, { kind: "room", id: roomId });
+  if (!data.name?.trim()) throw badRequest("Item name is required");
+  const count = await prisma.inspectionItem.count({ where: { roomId } });
+  return prisma.inspectionItem.create({ data: { roomId, name: data.name.trim(), isEquipment: !!data.isEquipment, sortOrder: count } });
+}
+
+export async function deleteInspectionItem(ownerId: string, itemId: string) {
+  await structureEditable(ownerId, { kind: "item", id: itemId });
+  await deleteStoredPhotos({ OR: [{ itemId }, { blemish: { itemId } }] });
+  await prisma.inspectionItem.delete({ where: { id: itemId } });
+}
+
+export async function deleteInspectionRoom(ownerId: string, roomId: string) {
+  await structureEditable(ownerId, { kind: "room", id: roomId });
+  await deleteStoredPhotos({ OR: [{ roomId }, { item: { roomId } }, { blemish: { roomId } }] });
+  await prisma.inspectionRoom.delete({ where: { id: roomId } });
+}
+
 // ---- Edits --------------------------------------------------------------------
 
 const CONDITIONS = ["EXCELLENT", "GOOD", "FAIR", "POOR", "DAMAGED"];
@@ -176,23 +215,26 @@ function oneOf<T extends string>(v: unknown, allowed: string[], label: string): 
   return v as T;
 }
 
-export async function updateRoom(ownerId: string, roomId: string, data: { condition?: Condition | null; notes?: string }) {
-  await resolveEditable(ownerId, { kind: "room", id: roomId });
+export async function updateRoom(ownerId: string, roomId: string, data: { condition?: Condition | null; notes?: string; name?: string }) {
+  const insp = await resolveEditable(ownerId, { kind: "room", id: roomId });
+  const name = data.name === undefined ? undefined : await newName(insp, data.name, "Room");
   return prisma.inspectionRoom.update({
     where: { id: roomId },
-    data: { condition: oneOf<Condition>(data.condition, CONDITIONS, "condition"), notes: data.notes },
+    data: { name, condition: oneOf<Condition>(data.condition, CONDITIONS, "condition"), notes: data.notes },
   });
 }
 
 export async function updateItem(
   ownerId: string,
   itemId: string,
-  data: { condition?: Condition | null; workingOrder?: WorkingOrder | null; notes?: string; changeStatus?: ChangeStatus | null },
+  data: { condition?: Condition | null; workingOrder?: WorkingOrder | null; notes?: string; changeStatus?: ChangeStatus | null; name?: string },
 ) {
-  await resolveEditable(ownerId, { kind: "item", id: itemId });
+  const insp = await resolveEditable(ownerId, { kind: "item", id: itemId });
+  const name = data.name === undefined ? undefined : await newName(insp, data.name, "Item");
   return prisma.inspectionItem.update({
     where: { id: itemId },
     data: {
+      name,
       condition: oneOf<Condition>(data.condition, CONDITIONS, "condition"),
       workingOrder: oneOf<WorkingOrder>(data.workingOrder, WORKING, "working order"),
       changeStatus: oneOf<ChangeStatus>(data.changeStatus, CHANGES, "change status"),
@@ -307,4 +349,19 @@ export async function readPhoto(ownerId: string, photoId: string) {
   });
   if (!photo) throw notFound();
   return { data: await getStorage().get(photo.storageKey), mimeType: photo.mimeType };
+}
+
+async function deleteStoredPhotos(where: Prisma.PhotoWhereInput) {
+  const storage = getStorage();
+  for (const p of await prisma.photo.findMany({ where })) await storage.delete(p.storageKey);
+}
+
+/** Deletes an unsigned inspection with everything in it. Signed inspections are locked records. */
+export async function deleteInspection(ownerId: string, id: string) {
+  const i = await getInspection(ownerId, id);
+  if (i.status === "SIGNED") throw conflict("A signed inspection is locked and cannot be deleted");
+  await deleteStoredPhotos({
+    OR: [{ room: { inspectionId: id } }, { item: { room: { inspectionId: id } } }, { blemish: { room: { inspectionId: id } } }],
+  });
+  await prisma.inspection.delete({ where: { id } });
 }

@@ -70,6 +70,7 @@ model Property {
   owner     Owner    @relation(fields: [ownerId], references: [id])
   name      String
   address   String   @default("")
+  isDefaultLayout Boolean @default(false)
   createdAt DateTime @default(now())
   rooms     Room[]
   leases    Lease[]

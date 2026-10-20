@@ -4,7 +4,19 @@ import { getTemplate } from "../templates";
 
 export async function createProperty(ownerId: string, data: { name: string; address?: string }) {
   if (!data.name?.trim()) throw badRequest("Property name is required");
-  return prisma.property.create({ data: { ownerId, name: data.name.trim(), address: data.address?.trim() ?? "" } });
+  const created = await prisma.property.create({ data: { ownerId, name: data.name.trim(), address: data.address?.trim() ?? "" } });
+  const base = await prisma.property.findFirst({ where: { ownerId, isDefaultLayout: true, id: { not: created.id } } });
+  if (base) await cloneLayout(ownerId, base.id, created.id);
+  return created;
+}
+
+/** Marks one property's rooms and items as the starting layout for every new property. */
+export async function setDefaultLayout(ownerId: string, id: string) {
+  await getProperty(ownerId, id);
+  await prisma.$transaction([
+    prisma.property.updateMany({ where: { ownerId }, data: { isDefaultLayout: false } }),
+    prisma.property.update({ where: { id }, data: { isDefaultLayout: true } }),
+  ]);
 }
 
 export function listProperties(ownerId: string) {
@@ -77,6 +89,13 @@ export async function addItem(ownerId: string, roomId: string, data: { name: str
   return prisma.item.create({
     data: { roomId, name: data.name.trim(), isEquipment: !!data.isEquipment, sortOrder: count },
   });
+}
+
+export async function renameItem(ownerId: string, itemId: string, name: string) {
+  const it = await prisma.item.findFirst({ where: { id: itemId, room: { property: { ownerId } } } });
+  if (!it) throw notFound("Item not found");
+  if (!name?.trim()) throw badRequest("Item name is required");
+  return prisma.item.update({ where: { id: itemId }, data: { name: name.trim() } });
 }
 
 export async function deleteItem(ownerId: string, itemId: string) {

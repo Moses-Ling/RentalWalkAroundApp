@@ -1,6 +1,7 @@
 import { prisma } from "../db";
-import { badRequest, notFound } from "../errors";
+import { badRequest, conflict, notFound } from "../errors";
 import { getProperty } from "./property";
+import { getStorage } from "../storage";
 
 export async function createLease(
   ownerId: string,
@@ -37,4 +38,23 @@ export async function getLease(ownerId: string, id: string) {
 export async function updateLeaseStatus(ownerId: string, id: string, status: "DRAFT" | "ACTIVE" | "ENDED") {
   await getLease(ownerId, id);
   return prisma.lease.update({ where: { id }, data: { status } });
+}
+
+/** Deletes a lease with its inspections, repairs and photos. Refused once any inspection is signed. */
+export async function deleteLease(ownerId: string, id: string) {
+  const l = await getLease(ownerId, id);
+  if (l.inspections.some((i) => i.status === "SIGNED")) throw conflict("A lease with a signed inspection cannot be deleted");
+  const storage = getStorage();
+  const photos = await prisma.photo.findMany({
+    where: {
+      OR: [
+        { repair: { leaseId: id } },
+        { room: { inspection: { leaseId: id } } },
+        { item: { room: { inspection: { leaseId: id } } } },
+        { blemish: { room: { inspection: { leaseId: id } } } },
+      ],
+    },
+  });
+  for (const p of photos) await storage.delete(p.storageKey);
+  await prisma.lease.delete({ where: { id } });
 }

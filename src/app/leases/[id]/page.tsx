@@ -72,7 +72,12 @@ export default function LeasePage({ params }: { params: Promise<{ id: string }> 
                 <div className="font-medium">{enumLabel(t)}</div>
                 <div className="text-sm text-slate-500">{i ? (i.status === "SIGNED" ? "Signed & locked" : "In progress") : "Not started"}</div>
               </div>
-              {i ? <Link className="btn-secondary" href={`/inspections/${i.id}`}>Open</Link> : <button className="btn" onClick={() => start(t)}>Start</button>}
+              {i ? (
+                <div className="flex gap-2">
+                  <Link className="btn-secondary" href={`/inspections/${i.id}`}>Open</Link>
+                  {i.status !== "SIGNED" && <button className="text-sm text-red-600" onClick={async () => { if (confirm(`Delete this ${enumLabel(t)} inspection and everything in it?`)) { try { await api("DELETE", `inspections/${i.id}`); reload(); } catch (e) { setErr((e as Error).message); } } }}>Delete</button>}
+                </div>
+              ) : <button className="btn" onClick={() => start(t)}>Start</button>}
             </div>
           );
         })}
@@ -129,6 +134,9 @@ export default function LeasePage({ params }: { params: Promise<{ id: string }> 
           </form>
         )}
       </section>
+      {!lease.inspections.some((i) => i.status === "SIGNED") && (
+        <button className="text-sm text-red-600" onClick={async () => { if (confirm("Delete this lease and all its inspections and repairs?")) { try { await api("DELETE", `leases/${id}`); location.href = `/properties/${lease.property.id}`; } catch (e) { setErr((e as Error).message); } } }}>Delete lease</button>
+      )}
     </div>
   );
 }

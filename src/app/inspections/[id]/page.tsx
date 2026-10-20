@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Photos from "../../../components/Photos";
 import SignaturePad from "../../../components/SignaturePad";
 import { api, enumLabel, useApi } from "../../../lib/client";
@@ -60,11 +60,28 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
   const [sigRole, setSigRole] = useState("LANDLORD");
   const [sigName, setSigName] = useState("");
   const [sigImg, setSigImg] = useState<string | null>(null);
+  const [showSign, setShowSign] = useState(false);
+  const [editing, setEditing] = useState<{ kind: "room" | "item"; id: string; name: string } | null>(null);
+  const [newItem, setNewItem] = useState("");
+  const [newRoom, setNewRoom] = useState("");
+  const firstRoom = insp?.rooms[0]?.id;
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+  useEffect(() => { if (firstRoom) setOpen((o) => o ?? firstRoom); }, [firstRoom]);
 
   if (error) return <p className="text-red-600">{error}</p>;
   if (!insp) return <p>Loading…</p>;
   const locked = insp.status === "SIGNED";
   const moveOut = insp.type === "MOVE_OUT";
+
+  const canEditLayout = !locked && !moveOut;
+  const saveEdit = () => { const e = editing; setEditing(null); if (e && e.name.trim()) patch(`inspection-${e.kind}s/${e.id}`, { name: e.name }); };
+  const editor = (kind: "room" | "item", rid: string) => (
+    <form className="flex flex-1 gap-2" onSubmit={(ev) => { ev.preventDefault(); saveEdit(); }}>
+      <input autoFocus className="input" value={editing!.name} onChange={(ev) => setEditing({ kind, id: rid, name: ev.target.value })} />
+      <button className="btn">Save</button>
+      <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
+    </form>
+  );
 
   const run = async (fn: () => Promise<unknown>) => { setErr(""); try { await fn(); await reload(); } catch (e) { setErr((e as Error).message); } };
   const patch = (path: string, body: unknown) => run(() => api("PATCH", path, body));
@@ -77,7 +94,7 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
         {locked && <span className="rounded bg-green-100 px-2 py-1 text-sm text-green-800">Signed & locked</span>}
       </div>
       {err && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{err}</p>}
-      {!locked && insp.signatures.length > 0 && <p className="rounded bg-blue-50 p-2 text-sm text-blue-800">Signed by {insp.signatures.map((s) => s.name).join(", ")}. Editing will clear signatures.</p>}
+      {!locked && insp.signatures.length > 0 && <p className="rounded bg-blue-50 p-2 text-sm text-blue-800">Signed by {insp.signatures.map((s) => s.name).join(", ")}. Any change or comment clears signatures, so both parties re-sign.</p>}
 
       {insp.rooms.map((room) => (
         <div key={room.id} className="card">
@@ -87,6 +104,12 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
           </button>
           {open === room.id && (
             <div className="mt-3 space-y-4">
+              {canEditLayout && (
+                <div className="flex items-center gap-4 text-sm">
+                  {editing?.kind === "room" && editing.id === room.id ? editor("room", room.id) : <button className="text-slate-600" onClick={() => setEditing({ kind: "room", id: room.id, name: room.name })}>Rename room</button>}
+                  <button className="text-red-600" onClick={() => confirm(`Remove ${room.name} from this inspection?`) && run(() => api("DELETE", `inspection-rooms/${room.id}`))}>Remove room</button>
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="label">Room condition</label>
                 <Select value={room.condition} options={CONDITIONS} disabled={locked} onChange={(v) => patch(`inspection-rooms/${room.id}`, { condition: v })} />
@@ -99,7 +122,17 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
                 <h3 className="text-sm font-semibold">Items</h3>
                 {room.items.map((it) => (
                   <div key={it.id} className="space-y-2 rounded-lg bg-slate-50 p-3">
-                    <div className="font-medium">{it.name}{it.isEquipment && <span className="ml-2 rounded bg-slate-200 px-1.5 text-xs">equipment</span>}</div>
+                    {editing?.kind === "item" && editing.id === it.id ? editor("item", it.id) : (
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">{it.name}{it.isEquipment && <span className="ml-2 rounded bg-slate-200 px-1.5 text-xs">equipment</span>}</div>
+                        {canEditLayout && (
+                          <span className="flex gap-3 text-sm">
+                            <button className="text-slate-600" onClick={() => setEditing({ kind: "item", id: it.id, name: it.name })}>rename</button>
+                            <button className="text-red-600" onClick={() => confirm(`Remove ${it.name}?`) && run(() => api("DELETE", `inspection-items/${it.id}`))}>remove</button>
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       <div><label className="label">Condition</label><Select value={it.condition} options={CONDITIONS} disabled={locked} onChange={(v) => patch(`inspection-items/${it.id}`, { condition: v })} /></div>
                       {it.isEquipment && <div><label className="label">Working order</label><Select value={it.workingOrder} options={WORKING} disabled={locked} onChange={(v) => patch(`inspection-items/${it.id}`, { workingOrder: v })} /></div>}
@@ -111,6 +144,13 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
                   </div>
                 ))}
               </div>
+
+              {canEditLayout && (
+                <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); run(async () => { await api("POST", `inspection-rooms/${room.id}/items`, { name: newItem, isEquipment: /(fridge|oven|stove|washer|dryer|unit|fan|heater|detector|toilet|dishwasher|microwave|lock)/i.test(newItem) }); setNewItem(""); }); }}>
+                  <input className="input" placeholder="Add item to this room" value={newItem} onChange={(e) => setNewItem(e.target.value)} />
+                  <button className="btn">Add</button>
+                </form>
+              )}
 
               <div className="space-y-3">
                 <h3 className="text-sm font-semibold">Blemishes</h3>
@@ -138,6 +178,13 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
         </div>
       ))}
 
+      {canEditLayout && (
+        <form className="card flex gap-2" onSubmit={(e) => { e.preventDefault(); run(async () => { await api("POST", `inspections/${id}/rooms`, { name: newRoom }); setNewRoom(""); }); }}>
+          <input className="input" placeholder="Add a room to this inspection" value={newRoom} onChange={(e) => setNewRoom(e.target.value)} />
+          <button className="btn">Add room</button>
+        </form>
+      )}
+
       <section className="card space-y-3">
         <h2 className="font-medium">Sign-off</h2>
         {!moveOut && (
@@ -149,6 +196,9 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
         {locked ? (
           <p className="text-sm text-slate-600">Both parties signed. This record can no longer be edited.</p>
         ) : (
+          !showSign && insp.signatures.length === 0 ? (
+            <button className="btn w-full" onClick={() => setShowSign(true)}>Ready to sign</button>
+          ) : (
           <>
             <p className="text-sm text-slate-600">Hand the phone to the renter to review, comment and sign. The inspection locks once both parties have signed.</p>
             {insp.signatures.map((s) => <p key={s.role} className="text-sm text-green-700">✓ {enumLabel(s.role)} signed: {s.name}</p>)}
@@ -157,6 +207,7 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
             <SignaturePad onChange={setSigImg} />
             <button className="btn w-full" disabled={!sigImg || !sigName.trim()} onClick={() => run(async () => { await api("POST", `inspections/${id}/sign`, { role: sigRole, name: sigName, imageDataUrl: sigImg }); setSigName(""); setSigImg(null); })}>Sign</button>
           </>
+          )
         )}
         <a className="btn-secondary w-full" href={`/api/inspections/${id}/report.pdf`} target="_blank">Download PDF</a>
       </section>

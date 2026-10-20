@@ -3,6 +3,7 @@ import { resetDb, makeOwner, PNG_1PX } from "../helpers";
 import { seedLease, seedMoveIn } from "./fixtures";
 import * as P from "@/server/services/property";
 import * as I from "@/server/services/inspection";
+import * as S from "@/server/services/signoff";
 import { prisma } from "@/server/db";
 
 beforeEach(resetDb);
@@ -159,5 +160,30 @@ describe("locking", () => {
     await expect(
       I.saveAnnotatedPhoto(owner.id, photo.id, `data:image/png;base64,${PNG_1PX.toString("base64")}`),
     ).rejects.toThrow(locked);
+  });
+});
+
+describe("editing the layout inside a move-in", () => {
+  it("renames, adds and removes rooms and items without touching the property", async () => {
+    const { owner, lease, prop } = await seedLease();
+    const insp = await I.startInspection(owner.id, lease.id, "MOVE_IN");
+    await I.updateRoom(owner.id, insp.rooms[1].id, { name: "Master bedroom" });
+    await I.addInspectionItem(owner.id, insp.rooms[0].id, { name: "Wine fridge", isEquipment: true });
+    await I.deleteInspectionItem(owner.id, insp.rooms[0].items[0].id);
+    const room = await I.addInspectionRoom(owner.id, insp.id, "Garage");
+    await I.deleteInspectionRoom(owner.id, room.id);
+    const after = await I.getInspection(owner.id, insp.id);
+    expect(after.rooms.map((r) => r.name)).toEqual(["Kitchen", "Master bedroom"]);
+    expect(after.rooms[0].items.some((i) => i.name === "Wine fridge")).toBe(true);
+    const full = await P.getProperty(owner.id, prop.id);
+    expect(full.rooms.map((r) => r.name)).toEqual(["Kitchen", "Bedroom"]);
+  });
+
+  it("refuses structure edits once signed", async () => {
+    const { owner, insp } = await seedMoveIn();
+    const sig = `data:image/png;base64,${PNG_1PX.toString("base64")}`;
+    await S.signInspection(owner.id, insp.id, "LANDLORD", "Lee", sig);
+    await S.signInspection(owner.id, insp.id, "RENTER", "Sam", sig);
+    await expect(I.addInspectionRoom(owner.id, insp.id, "Garage")).rejects.toThrow(/locked/);
   });
 });
