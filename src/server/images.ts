@@ -22,7 +22,10 @@ export function validateImage(data: Buffer): { mime: string; ext: string } {
 }
 
 export function dataUrlToBuffer(dataUrl: string): Buffer {
-  const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  // No regex over the payload: it overflows the stack on multi-megabyte strings.
+  const m = /^data:image\/(png|jpeg|webp);base64,/.exec(dataUrl.slice(0, 40));
   if (!m) throw new ImageError("Invalid image data URL");
-  return Buffer.from(m[2], "base64");
+  const buf = Buffer.from(dataUrl.slice(m[0].length), "base64");
+  if (buf.length === 0) throw new ImageError("Invalid image data URL");
+  return buf;
 }

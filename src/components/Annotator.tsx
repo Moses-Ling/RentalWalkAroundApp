@@ -29,7 +29,7 @@ function draw(ctx: CanvasRenderingContext2D, s: Shape, lw: number) {
   ctx.stroke();
 }
 
-/** Draws on top of a photo; the original is never modified. Saves a flattened PNG. */
+/** Draws on top of a photo; the original is never modified. Saves a flattened JPEG. */
 export default function Annotator({ src, onSave, onCancel }: { src: string; onSave: (dataUrl: string) => Promise<void>; onCancel: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const img = useRef<HTMLImageElement | null>(null);
@@ -37,6 +37,7 @@ export default function Annotator({ src, onSave, onCancel }: { src: string; onSa
   const [tool, setTool] = useState<Tool>("circle");
   const [color, setColor] = useState("#ef4444");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   const current = useRef<Shape | null>(null);
 
   const render = (extra?: Shape | null) => {
@@ -88,6 +89,7 @@ export default function Annotator({ src, onSave, onCancel }: { src: string; onSa
           }}
         />
       </div>
+      {err && <p className="bg-red-600 px-3 py-2 text-sm text-white">Could not save: {err}</p>}
       <div className="flex flex-wrap items-center gap-2 bg-slate-900 p-3">
         {(["circle", "arrow", "pen"] as Tool[]).map((t) => (
           <button key={t} onClick={() => setTool(t)} className={`min-h-[44px] rounded-lg px-3 text-sm ${tool === t ? "bg-white text-black" : "bg-slate-700 text-white"}`}>{t}</button>
@@ -101,7 +103,7 @@ export default function Annotator({ src, onSave, onCancel }: { src: string; onSa
           <button
             disabled={busy || shapes.length === 0}
             className="min-h-[44px] rounded-lg bg-blue-600 px-4 text-sm font-medium text-white disabled:opacity-50"
-            onClick={async () => { setBusy(true); try { await onSave(canvas.current!.toDataURL("image/png")); } finally { setBusy(false); } }}
+            onClick={async () => { setBusy(true); setErr(""); try { await onSave(canvas.current!.toDataURL("image/jpeg", 0.88)); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } }}
           >save</button>
         </div>
       </div>
