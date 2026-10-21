@@ -53,7 +53,8 @@ export default function Photos({
       {err && <p className="mt-1 text-sm text-red-600">{err}</p>}
       {editing && (
         <Annotator
-          src={`/api/photos/${editing}`}
+          src={`/api/photos/${annotatedFor.get(editing) ?? editing}`}
+          originalSrc={annotatedFor.has(editing) ? `/api/photos/${editing}` : undefined}
           onCancel={() => setEditing(null)}
           onSave={async (dataUrl) => { await api("POST", `photos/${editing}/annotate`, { dataUrl }); setEditing(null); onChange(); }}
         />

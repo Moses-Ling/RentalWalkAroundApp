@@ -30,7 +30,7 @@ function draw(ctx: CanvasRenderingContext2D, s: Shape, lw: number) {
 }
 
 /** Draws on top of a photo; the original is never modified. Saves a flattened JPEG. */
-export default function Annotator({ src, onSave, onCancel }: { src: string; onSave: (dataUrl: string) => Promise<void>; onCancel: () => void }) {
+export default function Annotator({ src, originalSrc, onSave, onCancel }: { src: string; originalSrc?: string; onSave: (dataUrl: string) => Promise<void>; onCancel: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const img = useRef<HTMLImageElement | null>(null);
   const [shapes, setShapes] = useState<Shape[]>([]);
@@ -38,6 +38,7 @@ export default function Annotator({ src, onSave, onCancel }: { src: string; onSa
   const [color, setColor] = useState("#ef4444");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [base, setBase] = useState(src);
   const current = useRef<Shape | null>(null);
 
   const render = (extra?: Shape | null) => {
@@ -58,8 +59,8 @@ export default function Annotator({ src, onSave, onCancel }: { src: string; onSa
       c.height = im.naturalHeight;
       render();
     };
-    im.src = src;
-  }, [src]); // eslint-disable-line react-hooks/exhaustive-deps
+    im.src = base;
+  }, [base]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { render(); }, [shapes]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -98,6 +99,9 @@ export default function Annotator({ src, onSave, onCancel }: { src: string; onSa
           <button key={c} aria-label={`color ${c}`} onClick={() => setColor(c)} style={{ background: c }} className={`h-9 w-9 rounded-full ${color === c ? "ring-2 ring-white" : ""}`} />
         ))}
         <button className="min-h-[44px] rounded-lg bg-slate-700 px-3 text-sm text-white" onClick={() => setShapes((s) => s.slice(0, -1))}>undo</button>
+        {originalSrc && base !== originalSrc && (
+          <button className="min-h-[44px] rounded-lg bg-slate-700 px-3 text-sm text-white" onClick={() => { setShapes([]); setBase(originalSrc); }}>remove old marks</button>
+        )}
         <div className="ml-auto flex gap-2">
           <button className="min-h-[44px] rounded-lg bg-slate-700 px-3 text-sm text-white" onClick={onCancel}>cancel</button>
           <button
