@@ -1,6 +1,7 @@
 import { Prisma, Condition, WorkingOrder, ChangeStatus, InspectionType } from "@prisma/client";
 import { prisma } from "../db";
 import { badRequest, conflict, notFound } from "../errors";
+import { SIGNING_ENABLED } from "../../lib/config";
 import { getStorage } from "../storage";
 import { dataUrlToBuffer, validateImage, ImageError } from "../images";
 
@@ -68,7 +69,7 @@ export async function startInspection(ownerId: string, leaseId: string, type: In
     },
   });
   if (!moveIn) throw conflict("Move-in inspection must exist before move-out");
-  if (moveIn.status !== "SIGNED") throw conflict("Move-in inspection must be signed before move-out");
+  if (SIGNING_ENABLED && moveIn.status !== "SIGNED") throw conflict("Move-in inspection must be signed before move-out");
 
   const out = await prisma.$transaction(async (tx) => {
     const insp = await tx.inspection.create({ data: { leaseId, type } });

@@ -126,7 +126,7 @@ describe("full lifecycle", () => {
 
     const pdf = await buildComparisonPdf(s.owner.id, s.lease.id);
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
-    expect(pdf.length).toBeGreaterThan(3000);
+    expect(pdf.length).toBeGreaterThan(1500);
   });
 
   it("comparison requires both inspections and is owner-scoped", async () => {

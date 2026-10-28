@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import Photos from "../../../components/Photos";
 import SignaturePad from "../../../components/SignaturePad";
 import { api, enumLabel, useApi } from "../../../lib/client";
+import { SIGNING_ENABLED } from "../../../lib/config";
 import { MOVE_IN_ACKNOWLEDGMENT } from "../../../lib/acknowledgment";
 
 const CONDITIONS = ["EXCELLENT", "GOOD", "FAIR", "POOR", "DAMAGED"];
@@ -94,7 +95,7 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
         {locked && <span className="rounded bg-green-100 px-2 py-1 text-sm text-green-800">Signed & locked</span>}
       </div>
       {err && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{err}</p>}
-      {!locked && insp.signatures.length > 0 && <p className="rounded bg-blue-50 p-2 text-sm text-blue-800">Signed by {insp.signatures.map((s) => s.name).join(", ")}. Any change or comment clears signatures, so both parties re-sign.</p>}
+      {SIGNING_ENABLED && !locked && insp.signatures.length > 0 && <p className="rounded bg-blue-50 p-2 text-sm text-blue-800">Signed by {insp.signatures.map((s) => s.name).join(", ")}. Any change or comment clears signatures, so both parties re-sign.</p>}
 
       {insp.rooms.map((room) => (
         <div key={room.id} className="card">
@@ -186,14 +187,16 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
       )}
 
       <section className="card space-y-3">
-        <h2 className="font-medium">Sign-off</h2>
+        <h2 className="font-medium">{SIGNING_ENABLED ? "Sign-off" : "Report"}</h2>
         {!moveOut && (
           <div className="space-y-2 rounded bg-slate-50 p-3 text-xs text-slate-700">
             <p className="font-medium">{MOVE_IN_ACKNOWLEDGMENT.title}</p>
             {MOVE_IN_ACKNOWLEDGMENT.paragraphs.map((p) => <p key={p}>{p}</p>)}
           </div>
         )}
-        {locked ? (
+        {!SIGNING_ENABLED ? (
+          <p className="text-sm text-slate-600">Download the PDF, print it, and have both parties sign the paper copy.</p>
+        ) : locked ? (
           <p className="text-sm text-slate-600">Both parties signed. This record can no longer be edited.</p>
         ) : (
           !showSign && insp.signatures.length === 0 ? (

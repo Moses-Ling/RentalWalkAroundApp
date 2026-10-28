@@ -1,3 +1,4 @@
+import { SIGNING_ENABLED } from "../../lib/config";
 import { prisma } from "../db";
 import { getStorage } from "../storage";
 import { PdfWriter } from "../pdf";
@@ -34,6 +35,13 @@ export async function writePhotos(w: PdfWriter, photos: PhotoRow[], indent: numb
 
 export async function writeSignatures(w: PdfWriter, insp: FullInspection) {
   w.heading("Signatures", 12);
+  if (!SIGNING_ENABLED) {
+    for (const role of ["LANDLORD", "RENTER"] as const) {
+      w.text(`${label(role)} signature: ______________________________   Date: ______________`, { size: 10 });
+      w.text(" ", { size: 10 });
+    }
+    return;
+  }
   for (const role of ["LANDLORD", "RENTER"] as const) {
     const sig = insp.signatures.find((s) => s.role === role);
     if (!sig) {
@@ -51,7 +59,7 @@ export async function buildInspectionPdf(ownerId: string, inspectionId: string):
   w.text(`${label(insp.type)} inspection report`.toUpperCase(), { size: 18, bold: true });
   w.text(`${insp.lease.property.name} - ${insp.lease.property.address}`, { size: 11 });
   w.text(`Renter: ${insp.lease.renterName}   Lease: ${fmtDate(insp.lease.startDate)} to ${fmtDate(insp.lease.endDate)}`);
-  w.text(`Status: ${insp.status}${insp.signedAt ? ` (signed ${fmtDate(insp.signedAt)})` : " (not yet signed)"}`);
+  if (SIGNING_ENABLED) w.text(`Status: ${insp.status}${insp.signedAt ? ` (signed ${fmtDate(insp.signedAt)})` : " (not yet signed)"}`);
 
   for (const room of insp.rooms) {
     w.heading(`${room.name} - ${label(room.condition)}`);

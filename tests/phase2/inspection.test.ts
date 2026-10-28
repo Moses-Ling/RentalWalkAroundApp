@@ -4,6 +4,7 @@ import { seedLease, seedMoveIn } from "./fixtures";
 import * as P from "@/server/services/property";
 import * as I from "@/server/services/inspection";
 import * as S from "@/server/services/signoff";
+import { SIGNING_ENABLED } from "@/lib/config";
 import { prisma } from "@/server/db";
 
 beforeEach(resetDb);
@@ -35,7 +36,7 @@ describe("starting a move-in inspection", () => {
     const { owner, lease } = await seedLease();
     await expect(I.startInspection(owner.id, lease.id, "MOVE_OUT")).rejects.toThrow(/Move-in/);
     await I.startInspection(owner.id, lease.id, "MOVE_IN");
-    await expect(I.startInspection(owner.id, lease.id, "MOVE_OUT")).rejects.toThrow(/signed/);
+    if (SIGNING_ENABLED) await expect(I.startInspection(owner.id, lease.id, "MOVE_OUT")).rejects.toThrow(/signed/);
   });
 });
 
