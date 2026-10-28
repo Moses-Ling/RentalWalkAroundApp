@@ -101,6 +101,13 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
       {err && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{err}</p>}
       {SIGNING_ENABLED && !locked && insp.signatures.length > 0 && <p className="rounded bg-blue-50 p-2 text-sm text-blue-800">Signed by {insp.signatures.map((s) => s.name).join(", ")}. Any change or comment clears signatures, so both parties re-sign.</p>}
 
+      {insp.rooms.length === 0 && (
+        <div className="card space-y-2">
+          <p className="text-sm text-slate-600">This inspection has no rooms. Load them from the property&apos;s layout to start the walk-through.</p>
+          {canEditLayout && <button className="btn w-full" onClick={() => run(() => api("POST", `inspections/${id}/load-layout`, {}))}>Load rooms from property</button>}
+        </div>
+      )}
+
       {insp.rooms.map((room) => (
         <div key={room.id} className="card">
           <button className="flex w-full items-center justify-between text-left" onClick={() => setOpen(open === room.id ? null : room.id)}>

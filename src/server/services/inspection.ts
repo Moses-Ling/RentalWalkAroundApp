@@ -2,6 +2,7 @@ import { Prisma, Condition, WorkingOrder, ChangeStatus, InspectionType } from "@
 import { prisma } from "../db";
 import { badRequest, conflict, notFound } from "../errors";
 import { SIGNING_ENABLED } from "../../lib/config";
+import { applyStartingLayout } from "./property";
 import { getStorage } from "../storage";
 import { dataUrlToBuffer, validateImage, ImageError } from "../images";
 
@@ -43,6 +44,7 @@ export async function startInspection(ownerId: string, leaseId: string, type: In
   if (existing) throw conflict(`A ${type} inspection already exists for this lease`);
 
   if (type === "MOVE_IN") {
+    if (lease.property.rooms.length === 0) throw conflict("This property has no rooms yet. Add rooms on the property page first.");
     const insp = await prisma.inspection.create({
       data: {
         leaseId,
@@ -175,6 +177,34 @@ async function structureEditable(ownerId: string, t: Target) {
   const insp = await resolveEditable(ownerId, t);
   if (insp.type !== "MOVE_IN") throw conflict("Rooms and items can only be changed on a move-in inspection");
   return insp;
+}
+
+/**
+ * Fills a move-in that was started with no rooms, from the property's layout. A property that
+ * has no rooms either gets the starting layout first.
+ */
+export async function loadPropertyLayout(ownerId: string, inspectionId: string) {
+  await structureEditable(ownerId, { kind: "inspection", id: inspectionId });
+  const insp = await getInspection(ownerId, inspectionId);
+  if (insp.rooms.length > 0) throw conflict("This inspection already has rooms");
+  const propertyId = insp.lease.propertyId;
+  if ((await prisma.room.count({ where: { propertyId } })) === 0) await applyStartingLayout(ownerId, propertyId);
+  const rooms = await prisma.room.findMany({
+    where: { propertyId },
+    orderBy: { sortOrder: "asc" },
+    include: { items: { orderBy: { sortOrder: "asc" } } },
+  });
+  for (const [i, r] of rooms.entries()) {
+    await prisma.inspectionRoom.create({
+      data: {
+        inspectionId,
+        name: r.name,
+        sortOrder: i,
+        items: { create: r.items.map((it, j) => ({ name: it.name, isEquipment: it.isEquipment, sortOrder: j })) },
+      },
+    });
+  }
+  return getInspection(ownerId, inspectionId);
 }
 
 export async function addInspectionRoom(ownerId: string, inspectionId: string, name: string) {

@@ -5,6 +5,8 @@ import * as P from "@/server/services/property";
 import * as I from "@/server/services/inspection";
 import * as S from "@/server/services/signoff";
 import { SIGNING_ENABLED } from "@/lib/config";
+import * as L from "@/server/services/lease";
+import { DEFAULT_LAYOUT } from "@/server/defaultLayout";
 import { prisma } from "@/server/db";
 
 beforeEach(resetDb);
@@ -186,5 +188,21 @@ describe("editing the layout inside a move-in", () => {
     await S.signInspection(owner.id, insp.id, "LANDLORD", "Lee", sig);
     await S.signInspection(owner.id, insp.id, "RENTER", "Sam", sig);
     await expect(I.addInspectionRoom(owner.id, insp.id, "Garage")).rejects.toThrow(/locked/);
+  });
+});
+
+describe("properties with no rooms", () => {
+  it("refuses to start a move-in, and an empty move-in can load the layout", async () => {
+    const owner = await makeOwner();
+    const prop = await P.createProperty(owner.id, { name: "Empty" });
+    const lease = await L.createLease(owner.id, prop.id, { renterName: "R", startDate: "2026-11-01", endDate: "2027-10-31" });
+    await expect(I.startInspection(owner.id, lease.id, "MOVE_IN")).rejects.toThrow(/no rooms/);
+
+    // an inspection created before that check existed
+    const empty = await prisma.inspection.create({ data: { leaseId: lease.id, type: "MOVE_IN" } });
+    const filled = await I.loadPropertyLayout(owner.id, empty.id);
+    expect(filled.rooms.map((r) => r.name)).toEqual(DEFAULT_LAYOUT.map((r) => r.name));
+    expect((await P.getProperty(owner.id, prop.id)).rooms).toHaveLength(DEFAULT_LAYOUT.length);
+    await expect(I.loadPropertyLayout(owner.id, empty.id)).rejects.toThrow(/already has rooms/);
   });
 });

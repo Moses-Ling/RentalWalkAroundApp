@@ -74,6 +74,9 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
 
       <section className="space-y-2">
         <h2 className="font-medium">Rooms and equipment</h2>
+        {p.rooms.length === 0 && (
+          <button className="btn w-full" onClick={() => run(() => api("POST", `properties/${id}/starting-layout`, {}))}>Add the standard rooms</button>
+        )}
         {p.isDefaultLayout
           ? <p className="text-sm text-green-700">✓ This layout is the default for new properties.</p>
           : <button className="btn-secondary" onClick={() => confirm("Use this layout as the default for all new properties?") && run(() => api("POST", `properties/${id}/default-layout`, {}))}>Use as default for new properties</button>}

@@ -29,6 +29,13 @@ export async function applyStartingLayout(ownerId: string, propertyId: string) {
 }
 
 /** Marks one property's rooms and items as the starting layout for every new property. */
+/** Gives an existing property with no rooms the starting layout. */
+export async function fillEmptyProperty(ownerId: string, propertyId: string) {
+  const p = await getProperty(ownerId, propertyId);
+  if (p.rooms.length > 0) throw badRequest("This property already has rooms");
+  await applyStartingLayout(ownerId, propertyId);
+}
+
 export async function setDefaultLayout(ownerId: string, id: string) {
   await getProperty(ownerId, id);
   await prisma.$transaction([
