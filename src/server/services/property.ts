@@ -1,13 +1,31 @@
 import { prisma } from "../db";
 import { badRequest, notFound } from "../errors";
 import { getTemplate } from "../templates";
+import { DEFAULT_LAYOUT } from "../defaultLayout";
 
 export async function createProperty(ownerId: string, data: { name: string; address?: string }) {
   if (!data.name?.trim()) throw badRequest("Property name is required");
-  const created = await prisma.property.create({ data: { ownerId, name: data.name.trim(), address: data.address?.trim() ?? "" } });
-  const base = await prisma.property.findFirst({ where: { ownerId, isDefaultLayout: true, id: { not: created.id } } });
-  if (base) await cloneLayout(ownerId, base.id, created.id);
-  return created;
+  return prisma.property.create({ data: { ownerId, name: data.name.trim(), address: data.address?.trim() ?? "" } });
+}
+
+/**
+ * Gives a newly created property its starting rooms: the property marked as default if there is
+ * one, otherwise the built-in DEFAULT_LAYOUT.
+ */
+export async function applyStartingLayout(ownerId: string, propertyId: string) {
+  const base = await prisma.property.findFirst({ where: { ownerId, isDefaultLayout: true, id: { not: propertyId } } });
+  if (base) return cloneLayout(ownerId, base.id, propertyId);
+  await getProperty(ownerId, propertyId);
+  for (const [i, r] of DEFAULT_LAYOUT.entries()) {
+    await prisma.room.create({
+      data: {
+        propertyId,
+        name: r.name,
+        sortOrder: i,
+        items: { create: r.items.map((it, j) => ({ name: it.name, isEquipment: it.isEquipment, sortOrder: j })) },
+      },
+    });
+  }
 }
 
 /** Marks one property's rooms and items as the starting layout for every new property. */

@@ -3,6 +3,7 @@ import { resetDb, makeOwner } from "../helpers";
 import * as P from "@/server/services/property";
 import * as L from "@/server/services/lease";
 import { ROOM_TEMPLATES } from "@/server/templates";
+import { DEFAULT_LAYOUT } from "@/server/defaultLayout";
 import { prisma } from "@/server/db";
 
 let owner: { id: string };
@@ -111,5 +112,25 @@ describe("leases", () => {
     ).rejects.toThrow();
     const l = await L.createLease(owner.id, p.id, { renterName: "X", startDate: "2026-01-01", endDate: "2027-01-01" });
     await expect(L.getLease(other.id, l.id)).rejects.toThrow();
+  });
+});
+
+describe("starting layout for new properties", () => {
+  it("uses the built-in layout when no property is the default", async () => {
+    const p = await P.createProperty(owner.id, { name: "New" });
+    await P.applyStartingLayout(owner.id, p.id);
+    const full = await P.getProperty(owner.id, p.id);
+    expect(full.rooms.map((r) => r.name)).toEqual(DEFAULT_LAYOUT.map((r) => r.name));
+    expect(full.rooms[0].items.length).toBe(DEFAULT_LAYOUT[0].items.length);
+  });
+
+  it("prefers the property marked as default", async () => {
+    const base = await P.createProperty(owner.id, { name: "Base" });
+    await P.addRoom(owner.id, base.id, { name: "Studio" });
+    await P.setDefaultLayout(owner.id, base.id);
+    const p = await P.createProperty(owner.id, { name: "New" });
+    await P.applyStartingLayout(owner.id, p.id);
+    const full = await P.getProperty(owner.id, p.id);
+    expect(full.rooms.map((r) => r.name)).toEqual(["Studio"]);
   });
 });

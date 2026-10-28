@@ -41,7 +41,11 @@ function match(pattern: string[], segs: string[]): Params | null {
 on("GET", "templates", async () => ROOM_TEMPLATES.map((t) => ({ key: t.key, name: t.name, itemCount: t.items.length })));
 
 on("GET", "properties", (c) => P.listProperties(c.ownerId));
-on("POST", "properties", (c) => P.createProperty(c.ownerId, c.body));
+on("POST", "properties", async (c) => {
+  const p = await P.createProperty(c.ownerId, c.body);
+  await P.applyStartingLayout(c.ownerId, p.id);
+  return p;
+});
 on("GET", "properties/:id", (c) => P.getProperty(c.ownerId, c.params.id));
 on("PATCH", "properties/:id", (c) => P.updateProperty(c.ownerId, c.params.id, c.body));
 on("DELETE", "properties/:id", async (c) => (await P.deleteProperty(c.ownerId, c.params.id), { ok: true }));
