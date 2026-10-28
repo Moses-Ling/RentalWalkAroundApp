@@ -66,7 +66,11 @@ export default function InspectionPage({ params }: { params: Promise<{ id: strin
   const [newItem, setNewItem] = useState("");
   const [newRoom, setNewRoom] = useState("");
   const firstRoom = insp?.rooms[0]?.id;
-  useEffect(() => { window.scrollTo(0, 0); }, []);
+  // The page is short ("Loading…") when it mounts, so scroll to the top once the content is
+  // there and stop the browser restoring an old scroll position (e.g. down at the Report section).
+  const loaded = !!insp;
+  useEffect(() => { history.scrollRestoration = "manual"; }, []);
+  useEffect(() => { if (loaded) window.scrollTo(0, 0); }, [loaded]);
   useEffect(() => { if (firstRoom) setOpen((o) => o ?? firstRoom); }, [firstRoom]);
 
   if (error) return <p className="text-red-600">{error}</p>;
