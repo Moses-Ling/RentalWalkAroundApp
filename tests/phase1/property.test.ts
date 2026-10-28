@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { resetDb, makeOwner } from "../helpers";
+import { resetDb, makeOwner, PNG_1PX } from "../helpers";
+import * as I from "@/server/services/inspection";
+import { getStorage } from "@/server/storage";
 import * as P from "@/server/services/property";
 import * as L from "@/server/services/lease";
 import { ROOM_TEMPLATES } from "@/server/templates";
@@ -132,5 +134,19 @@ describe("starting layout for new properties", () => {
     await P.applyStartingLayout(owner.id, p.id);
     const full = await P.getProperty(owner.id, p.id);
     expect(full.rooms.map((r) => r.name)).toEqual(["Studio"]);
+  });
+});
+
+describe("deleting a property", () => {
+  it("removes its leases, inspections and photo files", async () => {
+    const p = await P.createProperty(owner.id, { name: "Gone" });
+    await P.addRoom(owner.id, p.id, { templateKey: "kitchen" });
+    const lease = await L.createLease(owner.id, p.id, { renterName: "R", startDate: "2026-11-01", endDate: "2027-10-31" });
+    const insp = await I.startInspection(owner.id, lease.id, "MOVE_IN");
+    const photo = await I.addPhoto(owner.id, { roomId: insp.rooms[0].id }, PNG_1PX);
+    await P.deleteProperty(owner.id, p.id);
+    expect(await prisma.lease.count()).toBe(0);
+    expect(await prisma.inspection.count()).toBe(0);
+    await expect(getStorage().get(photo.storageKey)).rejects.toThrow();
   });
 });

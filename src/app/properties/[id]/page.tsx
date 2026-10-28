@@ -122,6 +122,11 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           </form>
         </div>
       </section>
+
+      <button
+        className="text-sm text-red-600"
+        onClick={() => confirm(`Delete ${p.name}? This permanently removes its leases, inspections, repairs and photos.`) && run(async () => { await api("DELETE", `properties/${id}`); location.href = "/"; })}
+      >Delete property</button>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { prisma } from "../db";
 import { badRequest, notFound } from "../errors";
 import { getTemplate } from "../templates";
 import { DEFAULT_LAYOUT } from "../defaultLayout";
+import { getStorage } from "../storage";
 
 export async function createProperty(ownerId: string, data: { name: string; address?: string }) {
   if (!data.name?.trim()) throw badRequest("Property name is required");
@@ -65,8 +66,22 @@ export async function updateProperty(ownerId: string, id: string, data: { name?:
   return prisma.property.update({ where: { id }, data });
 }
 
+/** Deletes a property with its leases, inspections, repairs and their photo files. */
 export async function deleteProperty(ownerId: string, id: string) {
   await getProperty(ownerId, id);
+  const lease = { lease: { propertyId: id } };
+  const photos = await prisma.photo.findMany({
+    where: {
+      OR: [
+        { repair: lease },
+        { room: { inspection: lease } },
+        { item: { room: { inspection: lease } } },
+        { blemish: { room: { inspection: lease } } },
+      ],
+    },
+  });
+  const storage = getStorage();
+  for (const p of photos) await storage.delete(p.storageKey);
   await prisma.property.delete({ where: { id } });
 }
 
