@@ -19,10 +19,20 @@ export default function Home() {
       </div>
       {error && <p className="text-red-600">{error}</p>}
       {data?.map((p) => (
-        <Link key={p.id} href={`/properties/${p.id}`} className="card block">
-          <div className="font-medium">{p.name}</div>
-          <div className="text-sm text-slate-500">{p.address || "No address"}</div>
-        </Link>
+        <div key={p.id} className="card flex items-center justify-between">
+          <Link href={`/properties/${p.id}`} className="block flex-1">
+            <div className="font-medium">{p.name}</div>
+            <div className="text-sm text-slate-500">{p.address || "No address"}</div>
+          </Link>
+          <button
+            className="text-sm text-red-600"
+            onClick={async () => {
+              if (!confirm(`Delete ${p.name}? This permanently removes its leases, inspections, repairs and photos.`)) return;
+              setErr("");
+              try { await api("DELETE", `properties/${p.id}`); reload(); } catch (e) { setErr((e as Error).message); }
+            }}
+          >Delete</button>
+        </div>
       ))}
       {data?.length === 0 && <p className="text-slate-500">No properties yet. Add your first one below.</p>}
       <form
