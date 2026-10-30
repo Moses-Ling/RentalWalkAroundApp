@@ -2,7 +2,7 @@ import { prisma } from "../db";
 import { conflict, notFound } from "../errors";
 import { PdfWriter } from "../pdf";
 import { diffInspections, CInspection } from "../../lib/compare";
-import { fmtDate, label, writePhotos, writeSignatures } from "./report";
+import { fmtDate, label, PhotoNumbers, refs, writeSignatures } from "./report";
 import { getInspection } from "./inspection";
 
 async function load(ownerId: string, leaseId: string) {
@@ -25,49 +25,97 @@ export async function compareLease(ownerId: string, leaseId: string) {
 }
 
 export async function buildComparisonPdf(ownerId: string, leaseId: string): Promise<Buffer> {
-  const { lease, moveOut, rooms, summary, repairs } = await compareLease(ownerId, leaseId);
-  const w = await PdfWriter.create();
-  w.text("MOVE-IN / MOVE-OUT COMPARISON", { size: 18, bold: true });
-  w.text(`${lease.property.name} - ${lease.property.address}`, { size: 11 });
-  w.text(`Renter: ${lease.renterName}   Lease: ${fmtDate(lease.startDate)} to ${fmtDate(lease.endDate)}`);
-  w.heading("Summary", 12);
-  w.text(
-    `Rooms with changes: ${summary.roomsFlagged}   Items in worse condition: ${summary.itemsWorse}   ` +
-      `Working-order changes: ${summary.workingOrderChanges}   New blemishes: ${summary.newBlemishes}   Repaired: ${summary.repairedBlemishes}`,
-  );
+  const { lease, moveIn, moveOut, rooms, summary, repairs } = await compareLease(ownerId, leaseId);
+  const title = "Move-In / Move-Out Comparison";
+  const w = await PdfWriter.create({ title, right: [lease.property.name, lease.property.address].filter(Boolean).join(" · ") });
+  w.title(title, `Prepared ${fmtDate(new Date())}`);
+  w.facts([
+    ["Property", lease.property.name],
+    ["Address", lease.property.address],
+    ["Tenant", lease.renterName],
+    ["Lease term", `${fmtDate(lease.startDate)} to ${fmtDate(lease.endDate)}`],
+    ["Move-in inspection", fmtDate(moveIn.createdAt)],
+    ["Move-out inspection", fmtDate(moveOut.createdAt)],
+  ]);
+  w.stats([
+    [summary.roomsFlagged, "rooms with changes"],
+    [summary.itemsWorse, "items worse"],
+    [summary.workingOrderChanges, "working-order changes"],
+    [summary.newBlemishes, "new blemishes"],
+    [summary.repairedBlemishes, "repaired"],
+  ]);
 
   const byName = new Map(moveOut.rooms.map((r) => [r.name, r]));
-  for (const room of rooms) {
-    w.heading(`${room.name}: ${label(room.before)} -> ${label(room.after)}${room.flagged ? "  [CHANGES]" : ""}`);
-    for (const it of room.items.filter((i) => i.flagged)) {
-      w.text(
-        `${it.name}: ${label(it.before?.condition)} -> ${label(it.after.condition)}` +
-          (it.isEquipment ? `; working: ${label(it.before?.workingOrder)} -> ${label(it.after.workingOrder)}` : "") +
-          (it.changeStatus && it.changeStatus !== "UNCHANGED" ? `  [${label(it.changeStatus)}]` : ""),
-        { bold: true, indent: 8, size: 9 },
+  const cond = (c: string | null | undefined, wo: string | null | undefined, eq: boolean) =>
+    [label(c) || "-", eq ? `working: ${label(wo) || "-"}` : ""].filter(Boolean).join("\n");
+  for (const [ri, room] of rooms.entries()) {
+    const num = String(ri + 1);
+    const photos = new PhotoNumbers(num);
+    w.sectionBar(
+      `${num}. ${room.name}${room.flagged ? "  - CHANGES" : ""}`,
+      `Move-in: ${label(room.before) || "-"}   Move-out: ${label(room.after) || "-"}`,
+    );
+    const changed = room.items.filter((i) => i.flagged);
+    if (changed.length) {
+      w.table(
+        [
+          { title: "Item", width: 0.24 },
+          { title: "Move-in", width: 0.18 },
+          { title: "Move-out", width: 0.18 },
+          { title: "Change / notes", width: 0.4 },
+        ],
+        changed.map((it) => [
+          it.name,
+          cond(it.before?.condition, it.before?.workingOrder, it.isEquipment),
+          { text: cond(it.after.condition, it.after.workingOrder, it.isEquipment), bold: it.trend === "WORSE" || it.workingOrderChanged },
+          [it.trend === "WORSE" ? "Worse" : it.trend === "BETTER" ? "Better" : "", it.changeStatus && it.changeStatus !== "UNCHANGED" ? label(it.changeStatus) : "", it.after.notes]
+            .filter(Boolean)
+            .join(" · "),
+        ]),
+        { continued: `${num}. ${room.name}` },
       );
-      if (it.after.notes) w.text(it.after.notes, { indent: 16, size: 9 });
+    } else {
+      w.noteBox("No item changes recorded.", { muted: true });
     }
     const src = byName.get(room.name)!;
     for (const b of room.newBlemishes) {
-      w.text(`NEW: ${b.description}`, { indent: 8, size: 9, color: [0.7, 0.1, 0.1] });
       const full = src.blemishes.find((x) => x.id === b.id);
-      if (full) await writePhotos(w, full.photos, 16);
+      w.callout("New damage", b.description, refs(full ? photos.add(full.photos, `${room.name} new damage`) : []));
     }
-    for (const b of room.repairedBlemishes) w.text(`REPAIRED: ${b.description}`, { indent: 8, size: 9, color: [0.1, 0.5, 0.2] });
-    for (const b of room.existingBlemishes) w.text(`Existing (unchanged): ${b.description}`, { indent: 8, size: 9, color: [0.4, 0.4, 0.4] });
+    for (const b of room.repairedBlemishes) w.callout("Repaired", b.description);
+    if (room.existingBlemishes.length) {
+      w.gap(5);
+      w.text(`Existing at move-in, unchanged: ${room.existingBlemishes.map((b) => b.description).join("; ")}`, { size: 8, muted: true });
+    }
+    if (photos.grid.length) await w.photoGrid(await photos.load());
   }
 
-  w.heading("Repair log");
-  if (!repairs.length) w.text("No repairs logged.", { size: 9 });
-  for (const r of repairs) {
-    w.text(
-      `${fmtDate(r.date)} - ${r.description}${r.vendor ? ` (${r.vendor})` : ""} - $${(r.costCents / 100).toFixed(2)} - ${label(r.responsibility)}` +
-        (r.blemish ? ` - fixes: ${r.blemish.description}` : "") + (r.item ? ` - item: ${r.item.name}` : ""),
-      { size: 9, indent: 8 },
+  w.sectionBar("Repair log", `${repairs.length} repair${repairs.length === 1 ? "" : "s"}`);
+  const repairPhotos = new PhotoNumbers("R");
+  if (!repairs.length) w.noteBox("No repairs logged.", { muted: true });
+  else
+    w.table(
+      [
+        { title: "Date", width: 0.13 },
+        { title: "Repair", width: 0.37 },
+        { title: "Vendor", width: 0.17 },
+        { title: "Cost", width: 0.11 },
+        { title: "Responsibility", width: 0.22 },
+      ],
+      repairs.map((r) => [
+        fmtDate(r.date),
+        [r.description, r.blemish ? `Fixes: ${r.blemish.description}` : r.item ? `Item: ${r.item.name}` : "", refs(repairPhotos.add(r.photos, r.description))]
+          .filter(Boolean)
+          .join("\n"),
+        r.vendor,
+        `$${(r.costCents / 100).toFixed(2)}`,
+        label(r.responsibility),
+      ]),
+      { continued: "Repair log" },
     );
-    await writePhotos(w, r.photos, 16);
-  }
+  if (repairPhotos.grid.length) await w.photoGrid(await repairPhotos.load());
+
+  w.newPage();
   await writeSignatures(w, moveOut);
   return w.save();
 }
